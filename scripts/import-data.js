@@ -1,39 +1,48 @@
 'use strict';
-// Pokreni nakon git clone da napuniš bazu iz dump fajlova
 // node scripts/import-data.js
+// Raspakuje dump.zip (iz roota projekta) i uvozi u MongoDB
 require('dotenv').config();
 
-const fs   = require('fs');
-const path = require('path');
+const fs     = require('fs');
+const path   = require('path');
+const { execSync } = require('child_process');
 const { connectMongo, Place, Review, disconnectMongo } = require('../src/mongo');
 
-const DUMP_DIR = path.join(__dirname, '../data/dump');
+const ROOT      = path.join(__dirname, '..');
+const DUMP_ZIP  = path.join(ROOT, 'dump.zip');
+const DUMP_DIR  = path.join(ROOT, 'data', 'dump');
 
 async function main() {
-  const placesFile  = path.join(DUMP_DIR, 'places.json');
-  const reviewsFile = path.join(DUMP_DIR, 'reviews.json');
-
-  if (!fs.existsSync(placesFile) || !fs.existsSync(reviewsFile)) {
-    console.error('[ERR] Nedostaju fajlovi u data/dump/');
-    console.error('      Traži od kolege da ti pošalje places.json i reviews.json');
-    process.exit(1);
+  // Raspakovavanje
+  if (!fs.existsSync(path.join(DUMP_DIR, 'places.json'))) {
+    if (!fs.existsSync(DUMP_ZIP)) {
+      console.error('[ERR] Nema dump.zip u rootu projekta.');
+      process.exit(1);
+    }
+    process.stdout.write('[import] Raspakovavam dump.zip... ');
+    fs.mkdirSync(path.join(ROOT, 'data'), { recursive: true });
+    try {
+      execSync(`tar -xf "${DUMP_ZIP}" -C "${path.join(ROOT, 'data')}"`);
+      console.log('OK');
+    } catch {
+      // fallback za stariji Windows
+      execSync(`cd /d "${path.join(ROOT, 'data')}" && tar -xf "${DUMP_ZIP}"`, { shell: 'cmd.exe' });
+      console.log('OK');
+    }
   }
 
   await connectMongo();
 
   // Places
   process.stdout.write('[import] Uvozim hotele... ');
-  const places = JSON.parse(fs.readFileSync(placesFile, 'utf8'));
+  const places = JSON.parse(fs.readFileSync(path.join(DUMP_DIR, 'places.json'), 'utf8'));
   await Place.deleteMany({});
   await Place.insertMany(places, { ordered: false });
-  console.log(`${places.length} hotela`);
+  console.log(`${places.length} hotela ✓`);
 
-  // Reviews
-  process.stdout.write('[import] Uvozim recenzije... ');
-  const reviews = JSON.parse(fs.readFileSync(reviewsFile, 'utf8'));
+  // Reviews u batchevima
+  const reviews = JSON.parse(fs.readFileSync(path.join(DUMP_DIR, 'reviews.json'), 'utf8'));
   await Review.deleteMany({});
-
-  // Batch insert po 1000
   const BATCH = 1000;
   let inserted = 0;
   for (let i = 0; i < reviews.length; i += BATCH) {

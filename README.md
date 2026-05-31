@@ -33,21 +33,13 @@ Otvori http://localhost:3000
 
 ### Opcija A — Import dump fajlova (preporučeno, brzo)
 
-Traži od kolege dump fajlove i stavi ih u `data/dump/`:
-
-```
-gundjalo/
-└── data/
-    └── dump/
-        ├── places.json    (~300 KB)
-        └── reviews.json   (~14 MB)
-```
-
-Zatim:
+`dump.zip` je uključen u repo (~15 MB, ~1000 hotela + 19k recenzija).
 
 ```bash
 node scripts/import-data.js
 ```
+
+Skripta sama raspakuje zip i uveze sve u MongoDB.
 
 ### Opcija B — Scrape sam (sporo, ~45 min)
 
