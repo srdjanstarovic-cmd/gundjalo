@@ -23,13 +23,16 @@ function disconnectMongo() {
 // ─── Place schema ─────────────────────────────────────────────────────────────
 
 const placeSchema = new mongoose.Schema({
-  type:       { type: String, required: true, enum: ['hotel', 'restaurant', 'destination'] },
-  name:       { type: String, required: true },
-  url:        { type: String, default: null },
-  tripId:     { type: String, default: null, index: true },
+  type:        { type: String, required: true, enum: ['hotel', 'restaurant', 'destination'] },
+  name:        { type: String, required: true },
+  platform:    { type: String, default: null },   // 'trip.com' | 'booking.com'
+  url:         { type: String, default: null },
+  tripId:      { type: String, default: null },
+  bookingId:   { type: String, default: null },
 }, { timestamps: true });
 
-placeSchema.index({ type: 1, name: 1 }, { unique: true });
+placeSchema.index({ tripId:    1 }, { unique: true, sparse: true });
+placeSchema.index({ bookingId: 1 }, { unique: true, sparse: true });
 
 const Place = mongoose.models.Place || mongoose.model('Place', placeSchema);
 
@@ -47,6 +50,8 @@ const reviewSchema = new mongoose.Schema({
   is_bad:          { type: Boolean, default: false },
   reviewer_country: { type: String, default: null },
   reviewer_country_code: { type: String, default: null },
+  positive_text:   { type: String, default: null },
+  negative_text:   { type: String, default: null },
 }, { timestamps: true });
 
 reviewSchema.index({ place_id: 1, rating: 1 });
@@ -68,7 +73,7 @@ async function insertPlaces(rows) {
   const ops = rows.map(r => ({
     updateOne: {
       filter: { type: r.type, name: r.name },
-      update: { $setOnInsert: { type: r.type, name: r.name, url: r.url || null, tripId: r.tripId || null } },
+      update: { $setOnInsert: { type: r.type, name: r.name, url: r.url || null, tripId: r.tripId || null, bookingId: r.bookingId || null } },
       upsert: true,
     }
   }));
