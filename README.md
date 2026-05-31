@@ -31,17 +31,40 @@ Otvori http://localhost:3000
 
 ## Punjenje baze podacima
 
-Baza dolazi prazna. Da prikupiš hotele i recenzije za Tokyo:
+### Opcija A — Import dump fajlova (preporučeno, brzo)
+
+Traži od kolege dump fajlove i stavi ih u `data/dump/`:
+
+```
+gundjalo/
+└── data/
+    └── dump/
+        ├── places.json    (~300 KB)
+        └── reviews.json   (~14 MB)
+```
+
+Zatim:
 
 ```bash
-# 1. Prikupi hotele sa Trip.com (stranice 1-100, ~1000 hotela)
+node scripts/import-data.js
+```
+
+### Opcija B — Scrape sam (sporo, ~45 min)
+
+```bash
+# 1. Prikupi ~1000 hotela sa Trip.com
 node scripts/fetch-tokyo-hotels.js
 
-# 2. Prikupi recenzije za sve hotele
+# 2. Prikupi recenzije (10 paralelno, checkpoint sistem)
 node scripts/fetch-reviews.js
 ```
 
-> Napomena: skripte direktno scrapuju Trip.com API i mogu potrajati 30-60 minuta.
+### Export (za dijeljenje dump-a)
+
+```bash
+node scripts/export-data.js
+# Kreira data/dump/places.json i data/dump/reviews.json
+```
 
 ## Struktura
 
