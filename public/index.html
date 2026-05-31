@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gundjalo</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #0f0f13;
+    color: #e8e8e8;
+    min-height: 100vh;
+    padding: 40px 20px;
+  }
+
+  .container { max-width: 740px; margin: 0 auto; }
+
+  h1 {
+    font-size: 28px;
+    font-weight: 800;
+    color: #fff;
+    margin-bottom: 6px;
+    letter-spacing: -0.5px;
+  }
+  .subtitle {
+    font-size: 14px;
+    color: #555;
+    margin-bottom: 32px;
+  }
+  .subtitle span { color: #ff6b6b; }
+
+  /* Search */
+  .search-wrap { position: relative; margin-bottom: 12px; }
+  .search-bar {
+    display: flex;
+    gap: 10px;
+  }
+  .search-bar input {
+    flex: 1;
+    background: #1c1c24;
+    border: 1px solid #2e2e3e;
+    border-radius: 10px;
+    padding: 14px 18px;
+    color: #e8e8e8;
+    font-size: 15px;
+    outline: none;
+    transition: border-color .2s;
+  }
+  .search-bar input:focus { border-color: #ff4d4d; }
+  .search-bar input::placeholder { color: #444; }
+  .search-bar button {
+    background: #ff4d4d;
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    padding: 14px 26px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .2s;
+    white-space: nowrap;
+  }
+  .search-bar button:hover { background: #e03030; }
+  .search-bar button:disabled { background: #3a2020; color: #666; cursor: default; }
+
+  /* Autocomplete */
+  .autocomplete {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 80px;
+    background: #1c1c24;
+    border: 1px solid #2e2e3e;
+    border-radius: 10px;
+    overflow: hidden;
+    z-index: 100;
+    display: none;
+  }
+  .autocomplete.open { display: block; }
+  .autocomplete-item {
+    padding: 11px 16px;
+    font-size: 14px;
+    color: #ccc;
+    cursor: pointer;
+    border-bottom: 1px solid #1e1e28;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .autocomplete-item:last-child { border-bottom: none; }
+  .autocomplete-item:hover { background: #252530; color: #fff; }
+
+  /* Error */
+  .error-msg {
+    background: #2a1010;
+    border: 1px solid #ff4d4d33;
+    border-radius: 10px;
+    padding: 14px 18px;
+    color: #ff8888;
+    font-size: 14px;
+    margin-bottom: 20px;
+    display: none;
+  }
+
+  /* Card */
+  .card {
+    background: #1c1c24;
+    border: 1px solid #2e2e3e;
+    border-radius: 16px;
+    overflow: hidden;
+    display: none;
+  }
+  .card.visible { display: block; }
+
+  .card-header {
+    padding: 24px 28px 20px;
+    border-bottom: 1px solid #2e2e3e;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  .hotel-name { font-size: 20px; font-weight: 700; color: #fff; line-height: 1.3; }
+  .hotel-location { font-size: 13px; color: #555; margin-top: 4px; }
+  .badge {
+    background: #ff4d4d18;
+    border: 1px solid #ff4d4d44;
+    color: #ff6b6b;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 6px 12px;
+    border-radius: 20px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .headline { padding: 20px 28px; border-bottom: 1px solid #2e2e3e; }
+  .headline-text {
+    font-size: 14px;
+    color: #aaa;
+    line-height: 1.7;
+    font-style: italic;
+    border-left: 3px solid #ff4d4d44;
+    padding-left: 14px;
+  }
+  .generating { color: #555; font-style: italic; font-size: 14px; padding: 20px 28px; border-bottom: 1px solid #2e2e3e; }
+
+  .stats {
+    padding: 18px 28px;
+    border-bottom: 1px solid #2e2e3e;
+    display: flex;
+    gap: 28px;
+  }
+  .stat-value { font-size: 22px; font-weight: 700; color: #ff6b6b; }
+  .stat-label { font-size: 11px; color: #555; margin-top: 2px; }
+
+  .countries { padding: 16px 28px; border-bottom: 1px solid #2e2e3e; }
+  .countries-title {
+    font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 1px;
+    color: #555; margin-bottom: 10px;
+  }
+  .country-list { display: flex; flex-wrap: wrap; gap: 8px; }
+  .country-tag {
+    background: #2a2a36;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 13px;
+    color: #bbb;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .country-tag img { width: 20px; height: 15px; object-fit: cover; border-radius: 2px; }
+  .country-count { font-size: 11px; color: #ff6b6b; font-weight: 600; }
+
+  .reviews-section { padding: 20px 28px; border-bottom: 1px solid #2e2e3e; }
+  .reviews-title {
+    font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 1px;
+    color: #555; margin-bottom: 14px;
+  }
+  .review-item {
+    padding: 12px 0;
+    border-bottom: 1px solid #1e1e28;
+    font-size: 13px;
+    line-height: 1.6;
+    color: #aaa;
+  }
+  .review-item:last-child { border-bottom: none; padding-bottom: 0; }
+  .review-meta {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 6px;
+    align-items: center;
+  }
+  .review-rating {
+    background: #ff4d4d22;
+    color: #ff7777;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+  .review-country { font-size: 11px; color: #555; display: flex; align-items: center; gap: 4px; }
+  .review-country img { width: 14px; height: 11px; object-fit: cover; border-radius: 1px; }
+
+  .card-footer {
+    padding: 16px 28px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .link-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #2a2a36;
+    color: #aaa;
+    text-decoration: none;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 7px 14px;
+    border-radius: 8px;
+    border: 1px solid #3a3a4e;
+    transition: all .2s;
+  }
+  .link-btn:hover { background: #34344a; color: #ddd; }
+  .link-btn-primary { background: #ff4d4d18; border-color: #ff4d4d44; color: #ff8c8c; }
+  .link-btn-primary:hover { background: #ff4d4d28; color: #ffaaaa; }
+
+  /* Spinner */
+  .spinner {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid #333;
+    border-top-color: #ff4d4d;
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <h1>Gundjalo 😤</h1>
+  <p class="subtitle">Real complaints. Real hotels. <span>Zero mercy.</span></p>
+
+  <div class="search-wrap">
+    <div class="search-bar">
+      <input id="q" type="text" placeholder="Hotel name or trip.com link...">
+      <button id="btn" onclick="doSearch()">Sumiraj</button>
+    </div>
+    <div class="autocomplete" id="autocomplete"></div>
+  </div>
+
+  <div class="error-msg" id="err"></div>
+  <div class="card" id="card"></div>
+
+</div>
+
+<script>
+let debounceTimer = null;
+let selectedHotelId = null;
+
+const qEl     = document.getElementById('q');
+const btnEl   = document.getElementById('btn');
+const acEl    = document.getElementById('autocomplete');
+const cardEl  = document.getElementById('card');
+const errEl   = document.getElementById('err');
+
+qEl.addEventListener('input', () => {
+  selectedHotelId = null;
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(fetchSuggestions, 280);
+});
+
+qEl.addEventListener('keydown', e => {
+  if (e.key === 'Enter') doSearch();
+  if (e.key === 'Escape') closeAc();
+});
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.search-wrap')) closeAc();
+});
+
+async function fetchSuggestions() {
+  const q = qEl.value.trim();
+  if (q.length < 2) return closeAc();
+
+  const res  = await fetch('/api/search?q=' + encodeURIComponent(q));
+  const list = await res.json();
+
+  if (!list.length) return closeAc();
+
+  acEl.innerHTML = list.map(h =>
+    `<div class="autocomplete-item" data-id="${h._id}" data-name="${h.name.replace(/"/g,'&quot;')}">${h.name}</div>`
+  ).join('');
+  acEl.classList.add('open');
+
+  acEl.querySelectorAll('.autocomplete-item').forEach(el => {
+    el.addEventListener('click', () => {
+      selectedHotelId = el.dataset.id;
+      qEl.value = el.dataset.name;
+      closeAc();
+      loadHotel(selectedHotelId);
+    });
+  });
+}
+
+function closeAc() { acEl.classList.remove('open'); acEl.innerHTML = ''; }
+
+async function doSearch() {
+  const q = qEl.value.trim();
+  if (!q) return;
+
+  // Ako je URL — direktno traži
+  if (q.includes('trip.com')) {
+    const res   = await fetch('/api/search?q=' + encodeURIComponent(q));
+    const list  = await res.json();
+    if (list.length) return loadHotel(list[0]._id);
+    return showError('Hotel nije pronađen u bazi. Provjeri link.');
+  }
+
+  if (selectedHotelId) return loadHotel(selectedHotelId);
+
+  // Traži po imenu
+  const res  = await fetch('/api/search?q=' + encodeURIComponent(q));
+  const list = await res.json();
+  if (!list.length) return showError('Hotel nije pronađen. Pokušaj sa tačnijim imenom.');
+  loadHotel(list[0]._id);
+}
+
+function showError(msg) {
+  errEl.textContent = msg;
+  errEl.style.display = 'block';
+  cardEl.classList.remove('visible');
+}
+
+function hideError() { errEl.style.display = 'none'; }
+
+async function loadHotel(id) {
+  hideError();
+  btnEl.disabled = true;
+  btnEl.innerHTML = '<span class="spinner"></span> Učitavam...';
+  cardEl.innerHTML = '';
+  cardEl.classList.add('visible');
+
+  try {
+    const res  = await fetch('/api/hotel/' + id);
+    const data = await res.json();
+    renderCard(data);
+  } catch(e) {
+    showError('Greška pri učitavanju.');
+    cardEl.classList.remove('visible');
+  } finally {
+    btnEl.disabled = false;
+    btnEl.textContent = 'Sumiraj';
+  }
+}
+
+function flag(code) {
+  if (!code) return '';
+  return `<img src="https://flagcdn.com/20x15/${code.toLowerCase()}.png" alt="${code}">`;
+}
+
+function renderCard(data) {
+  const { hotel, badCount, avgRating, topCountries, reviews } = data;
+  const hotelName = hotel.name.replace(/\(.*\)$/, '').trim();
+  const taSearch  = encodeURIComponent(hotelName + ' Tokyo');
+  const bkSearch  = encodeURIComponent(hotelName + ' Tokyo');
+
+  const countriesHtml = topCountries.map(c => `
+    <span class="country-tag">
+      ${flag(c.code)}
+      ${c.name}
+      <span class="country-count">${c.count} reviews</span>
+    </span>`).join('');
+
+  const reviewsHtml = reviews.slice(0, 8).map(r => `
+    <div class="review-item">
+      <div class="review-meta">
+        <span class="review-rating">${r.rating}/10</span>
+        ${r.country ? `<span class="review-country">${flag(countryCode(r.country))} ${r.country}</span>` : ''}
+      </div>
+      <div>${escHtml(r.text.slice(0, 280))}${r.text.length > 280 ? '…' : ''}</div>
+    </div>`).join('');
+
+  cardEl.innerHTML = `
+    <div class="card-header">
+      <div>
+        <div class="hotel-name">${escHtml(hotelName)}</div>
+        <div class="hotel-location">Tokyo, Japan · Trip.com</div>
+      </div>
+      <div class="badge">${badCount} bad reviews</div>
+    </div>
+
+    <div class="generating">
+      ✦ Summary se generiše... (DeepSeek API coming soon)
+    </div>
+
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-value">${badCount}</div>
+        <div class="stat-label">Bad reviews</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">${avgRating.toFixed(1)}</div>
+        <div class="stat-label">Avg bad rating</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">${topCountries.length}</div>
+        <div class="stat-label">Top countries</div>
+      </div>
+    </div>
+
+    ${topCountries.length ? `
+    <div class="countries">
+      <div class="countries-title">Top complainers</div>
+      <div class="country-list">${countriesHtml}</div>
+    </div>` : ''}
+
+    <div class="reviews-section">
+      <div class="reviews-title">Bad reviews (${Math.min(reviews.length, 8)} of ${badCount})</div>
+      ${reviewsHtml}
+    </div>
+
+    <div class="card-footer">
+      <a class="link-btn link-btn-primary" href="${hotel.url}" target="_blank">📖 Trip.com</a>
+      <a class="link-btn" href="https://www.tripadvisor.com/Search?q=${taSearch}" target="_blank">TripAdvisor</a>
+      <a class="link-btn" href="https://www.booking.com/searchresults.html?ss=${bkSearch}" target="_blank">Booking.com</a>
+    </div>
+  `;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Gruba mapa ime → kod za flag u review karticama
+const countryCodes = {
+  'China':'cn','Japan':'jp','Korea, Republic of':'kr','South Korea':'kr',
+  'United States':'us','Hong Kong, China':'hk','Malaysia':'my',
+  'Singapore':'sg','Australia':'au','Taiwan':'tw','Thailand':'th',
+  'United Kingdom':'gb','Germany':'de','France':'fr','India':'in',
+  'Philippines':'ph','Indonesia':'id','Vietnam':'vn','Canada':'ca',
+};
+function countryCode(name) { return countryCodes[name] || null; }
+</script>
+</body>
+</html>
