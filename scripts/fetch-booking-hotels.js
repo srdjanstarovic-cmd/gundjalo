@@ -6,8 +6,20 @@ const { connectMongo, Place, disconnectMongo } = require('../src/mongo');
 
 const API_URL     = 'https://www.booking.com/dml/graphql?lang=en-us';
 const ROWS        = 25;
-const TARGET      = 1000;
-const DELAY_MS    = 800;
+const DELAY_MS    = 400;
+const MAX_PER_WARD = 3000; // limit za wardove koji vraćaju 10k+ (nisu filtrirani)
+
+// Svih 23 tokijska warda
+const TOKYO_WARDS = [
+  'Shinjuku Ward Tokyo',   'Shibuya Ward Tokyo',    'Taito Ward Tokyo',
+  'Sumida Ward Tokyo',     'Koto Ward Tokyo',        'Minato Ward Tokyo',
+  'Chiyoda Ward Tokyo',    'Chuo Ward Tokyo',        'Bunkyo Ward Tokyo',
+  'Shinagawa Ward Tokyo',  'Meguro Ward Tokyo',      'Ota Ward Tokyo',
+  'Setagaya Ward Tokyo',   'Nakano Ward Tokyo',      'Suginami Ward Tokyo',
+  'Toshima Ward Tokyo',    'Kita Ward Tokyo',         'Arakawa Ward Tokyo',
+  'Itabashi Ward Tokyo',   'Nerima Ward Tokyo',      'Adachi Ward Tokyo',
+  'Katsushika Ward Tokyo', 'Edogawa Ward Tokyo',
+];
 
 const HEADERS = {
   'content-type':  'application/json',
@@ -58,7 +70,7 @@ fragment BasicPropertyData on SearchResultProperty {
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-async function fetchPage(offset) {
+async function fetchPage(offset, searchString) {
   const res = await fetch(API_URL, {
     method:  'POST',
     headers: HEADERS,
@@ -71,19 +83,15 @@ async function fetchPage(offset) {
           encodedAutocompleteMeta: null,
           enableCampaigns: false,
           filters: {},
-          flexibleDatesConfig: {
-            broadDatesCalendar: { checkinMonths: [], los: [], startWeekdays: [] },
-            dateFlexUseCase: 'DATE_RANGE',
-            dateRangeCalendar: { checkin: [], checkout: [] },
-          },
+          flexibleDatesConfig: { broadDatesCalendar: { checkinMonths: [], los: [], startWeekdays: [] }, dateFlexUseCase: 'DATE_RANGE', dateRangeCalendar: { checkin: [], checkout: [] } },
           forcedBlocks: null,
-          location: { searchString: 'tokyo', destId: 0, destType: 'NO_DEST_TYPE' },
+          location: { searchString, destId: 0, destType: 'NO_DEST_TYPE' },
           metaContext: { metaCampaignId: 0, externalTotalPrice: null, feedPrice: null, hotelCenterAccountId: null, rateRuleId: null, dragongateTraceId: null, pricingProductsTag: null },
           showAparthotelAsHotel: true,
           needsRoomsMatch: false,
           optionalFeatures: { forceArpExperiments: true, testProperties: false },
           pagination: { rowsPerPage: ROWS, offset },
-          rawQueryForSession: `/searchresults.html?ss=tokyo`,
+          rawQueryForSession: `/searchresults.html?ss=${encodeURIComponent(searchString)}`,
           referrerBlock: null,
           sbCalendarOpen: false,
           sorters: { selectedSorter: null, referenceGeoId: null, tripTypeIntentId: null },
@@ -100,14 +108,13 @@ async function fetchPage(offset) {
 
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const json = await res.json();
-
   if (json.errors) throw new Error(json.errors[0]?.message || 'GraphQL error');
 
   const search = json?.data?.searchQueries?.search;
-  const total  = search?.pagination?.nbResultsTotal || 0;
-  const results = search?.results || [];
-
-  return { results, total };
+  return {
+    results: search?.results || [],
+    total:   search?.pagination?.nbResultsTotal || 0,
+  };
 }
 
 function extractHotel(r) {
@@ -125,29 +132,30 @@ function extractHotel(r) {
   };
 }
 
-async function main() {
-  await connectMongo();
-
+async function fetchAllForWard(ward, insertedRef) {
   let offset    = 0;
   let collected = 0;
   let total     = 0;
-  let inserted  = 0;
 
-  console.log(`\n[booking] Prikupljam Tokyo hotele sa Booking.com...\n`);
+  process.stdout.write(`\n  [${ward}] `);
 
-  while (collected < TARGET) {
-    process.stdout.write(`  Offset ${offset}... `);
-
+  while (true) {
     let results, pageTotal;
     try {
-      ({ results, total: pageTotal } = await fetchPage(offset));
+      ({ results, total: pageTotal } = await fetchPage(offset, ward));
     } catch (e) {
-      console.log(`GREŠKA: ${e.message}`);
-      break;
+      process.stdout.write(`ERR:${e.message} `);
+      await sleep(2000);
+      try {
+        ({ results, total: pageTotal } = await fetchPage(offset, ward));
+      } catch (e2) {
+        console.log(`\n    retry failed, preskačem ward`);
+        return collected;
+      }
     }
 
-    if (!results.length) { console.log('prazno, kraj'); break; }
-    if (total && !collected) console.log(`\n  Ukupno dostupnih: ${pageTotal}`);
+    if (!results || !results.length) break;
+    if (!total) { total = Math.min(pageTotal, MAX_PER_WARD); process.stdout.write(`(${pageTotal}) `); }
 
     const hotels = results.map(extractHotel).filter(Boolean);
     if (hotels.length) {
@@ -159,20 +167,39 @@ async function main() {
         }
       }));
       const res = await Place.bulkWrite(ops, { ordered: false });
-      inserted  += res.upsertedCount;
-      collected += hotels.length;
+      insertedRef.count += res.upsertedCount;
+      collected         += hotels.length;
     }
 
-    console.log(`${hotels.length} hotela (upisano novih: ${inserted}, ukupno sakupljeno: ${collected})`);
-
-    if (collected >= TARGET || offset + ROWS >= pageTotal) break;
+    process.stdout.write('.');
+    if (offset + ROWS >= total) break;
     offset += ROWS;
     await sleep(DELAY_MS);
   }
 
+  console.log(` → ${collected} scraped, ${insertedRef.count} novih ukupno`);
+  return collected;
+}
+
+async function main() {
+  await connectMongo();
+
+  const insertedRef = { count: 0 };
+  let totalCollected = 0;
+
+  console.log(`\n[booking] Prikupljam Tokyo hotele — ${TOKYO_WARDS.length} wardova\n`);
+
+  for (const ward of TOKYO_WARDS) {
+    const n = await fetchAllForWard(ward, insertedRef);
+    totalCollected += n;
+    await sleep(1000);
+  }
+
+  const totalInDB = await Place.countDocuments({ platform: 'booking.com' });
   console.log(`\n[booking] GOTOVO`);
-  console.log(`  Sakupljeno:   ${collected}`);
-  console.log(`  Novih u bazi: ${inserted}`);
+  console.log(`  Scraped ukupno: ${totalCollected}`);
+  console.log(`  Novih upisano:  ${insertedRef.count}`);
+  console.log(`  Booking.com u bazi: ${totalInDB}`);
 
   await disconnectMongo();
 }
